@@ -12,6 +12,7 @@ macro_rules! syscall {
 }
 
 pub mod manager;
+pub mod timer;
 pub use manager::Manager;
 pub enum Interest {
     READABLE,

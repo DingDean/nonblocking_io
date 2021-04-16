@@ -1,9 +1,12 @@
+use crate::timer::Queue;
 use crate::Interest;
 #[cfg(unix)]
 use std::os::unix::io::RawFd;
+use std::time::Duration;
 
 pub struct Manager {
     kq: i32,
+    timers: Queue,
 }
 
 impl Manager {
@@ -12,7 +15,10 @@ impl Manager {
         let kq = syscall!(kqueue())
             .and_then(|kq| syscall!(fcntl(kq, libc::F_SETFD, libc::FD_CLOEXEC)).map(|_| kq))?;
 
-        Ok(Manager { kq })
+        Ok(Manager {
+            kq,
+            timers: Queue::new(),
+        })
     }
 
     pub fn register(
@@ -67,9 +73,22 @@ impl Manager {
         })
     }
 
-    pub fn retrieve(&self, events: &mut Vec<libc::kevent>) -> std::io::Result<()> {
+    pub fn retrieve(
+        &self,
+        events: &mut Vec<libc::kevent>,
+        timeout: Option<Duration>,
+    ) -> std::io::Result<()> {
         let kq = self.kq;
-        // t += 1;
+        let timespec = match timeout {
+            Some(t) => libc::timespec {
+                tv_sec: t.as_secs() as i64,
+                tv_nsec: t.subsec_nanos() as i64,
+            },
+            None => libc::timespec {
+                tv_nsec: 1000,
+                tv_sec: 1,
+            },
+        };
         eprintln!("正在检查是否有事件发生");
         let n = syscall!(kevent(
             kq,
@@ -77,10 +96,7 @@ impl Manager {
             0,
             events.as_mut_ptr(),
             events.capacity() as libc::c_int,
-            &libc::timespec {
-                tv_sec: 5,
-                tv_nsec: 5000
-            }
+            &timespec
         ))?;
         if n > 0 {
             eprintln!("正在处理 {} 个事件", n);
@@ -89,5 +105,13 @@ impl Manager {
             };
         }
         Ok(())
+    }
+
+    pub fn timeout(&mut self, t: Duration, cb: Box<dyn FnOnce()>) {
+        self.timers.add(t, cb);
+    }
+
+    pub fn run_timers(&mut self) -> Option<Duration> {
+        self.timers.run()
     }
 }
