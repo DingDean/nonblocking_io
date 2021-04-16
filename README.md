@@ -1,6 +1,6 @@
 # Nio: Write Yourself An Eventloop
 
-我们的目标: **在 MacOS 上用 Rust 写一个简单的 event loop**
+我们的目标: **在 MacOS 上用 Rust ~~写一个简单的 event loop~~ 调用 kqueue**
 
 1. 如何调用系统指令？**引入 libc 模块**
 2. 如果监听系统消息？**使用 kqueue**
