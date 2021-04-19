@@ -11,12 +11,13 @@ use std::time::Duration;
 
 fn main() -> std::io::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:8888")?;
-    // 这是我们要监听的资源
-    // let mut stream = TcpStream::connect(listener.local_addr()?)?;
 
+    // This is our kqueue manager
     let mut manager = Manager::new()?;
 
+    // I can watch socket
     manager.register(listener.as_raw_fd(), vec![Interest::READABLE], 0)?;
+    // I can assign a timer
     manager.timeout(
         Duration::from_secs(5),
         Box::new(|| {
