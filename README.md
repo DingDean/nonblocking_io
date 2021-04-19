@@ -24,7 +24,17 @@ The main problems to solve would be:
 2. How do I poll for states?
 3. How do I nonblockingly poll for states?
 
-TODO: Fill in code snippets
+### Wait in the line please
+
+Kqueue, as name implies, there is a queue. If there is a queue, you wait. We can get a handle of this queue with `kqueue()` syscall：
+```rust
+let queue = libc::kqueue()
+  .and_then(|kq| libc::fcntl(kq, libc::F_SETFD, libc::FD_CLOEXEC))
+  .map(|_| kq))
+  .unwrap();
+```
+
+To use this queue, you first need to determine what to put in the queue. For I/O, you care about 2 things: the resource and the events attached to the resource. For this demo, I'll focus on a tcp socket as the resource, and I want to know when can I read from the socket so that I can accept connection. We call this combination of resouce and event as an interest. How do we translate this interest into our kqueue? Comes `kevent`。
 
 ## Time is Money
 
@@ -32,10 +42,10 @@ Time is also a resource we deeply care about. So **How do I schedule a timeout o
 
 The main strategy is actually similar to polling for i/o events. We have a **queue for timers managed by ourself** instead of the system. Then we use a BinaryHeap to keep track of the timers registered and run those pending timers before polling for i/o events. 
 
-**How long do we poll for i/o events before we yield to run timers?** A simple yet good enough strategy would be after running the pending timers, we calculate a timespec with which our kevent syscall would be used for timeouts. 
+**How long do we poll for i/o events before we yield to run timers?** One of the solution is actually a natural consequence of `kevent`. A simple yet good enough strategy would be after running the pending timers, we calculate a timespec with which our kevent syscall would be used for timeouts. 
 
 TODO: fill in code snippets
 
-## What's with name?
+## What's with the name?
 
 Well, the name is awefully similar with mio, but actually it's inspired by [Nio](https://www.nio.cn/), a luxury EV company in China, they are awesome.

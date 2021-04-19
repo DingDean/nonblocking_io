@@ -1,4 +1,5 @@
 /// Helper macro to execute a system call that returns an `io::Result`.
+/// Shameless borrowed from mio
 #[macro_export]
 macro_rules! syscall {
     ($fn: ident ( $($arg: expr),* $(,)* ) ) => {{
