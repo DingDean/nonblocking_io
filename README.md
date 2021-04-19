@@ -28,13 +28,93 @@ The main problems to solve would be:
 
 Kqueue, as name implies, there is a queue. If there is a queue, you wait. We can get a handle of this queue with `kqueue()` syscall：
 ```rust
-let queue = libc::kqueue()
-  .and_then(|kq| libc::fcntl(kq, libc::F_SETFD, libc::FD_CLOEXEC))
-  .map(|_| kq))
-  .unwrap();
+use libc;
+use nio::{Interest, Manager};
+use std::io::prelude::*;
+use std::net::TcpListener;
+#[cfg(unix)]
+use std::os::unix::io::AsRawFd;
+use std::time::Duration;
+
+
+fn main() -> std::io::Result<()> {
+  let queue = libc::kqueue()
+    .and_then(|kq| libc::fcntl(kq, libc::F_SETFD, libc::FD_CLOEXEC))
+    .map(|_| kq))
+    .unwrap();
+}
 ```
 
-To use this queue, you first need to determine what to put in the queue. For I/O, you care about 2 things: the resource and the events attached to the resource. For this demo, I'll focus on a tcp socket as the resource, and I want to know when can I read from the socket so that I can accept connection. We call this combination of resouce and event as an interest. How do we translate this interest into our kqueue? Comes `kevent`。
+To use this queue, you first need to determine what to put in the queue. For I/O, you care about 2 things: the resource and the events attached to the resource. For this demo, I'll focus on a tcp socket as the resource, and I want to know when can I read from the socket so that I can accept connection. We call this combination of resouce and event as an interest. How do we translate this interest into our kqueue? Comes `kevent`.
+
+`kevent` syscall is used for two related purposes:
+
+1. registered the resource and the events you want to observe.
+2. retrieve any events occurs you registered when being called.
+
+First things first, let's accquire the resouce we need:
+```rust
+fn main() -> std::io::Result<()> {
+  // ...
+
+  // we care about a tcp listener
+  let listener = TcpListener::bind("127.0.0.1:8888")?;
+}
+```
+
+Second, we defined the interest we have on this resouce:
+```rust
+fn main() -> std::io::Result<()> {
+  // ...
+
+  // we care about a tcp listener
+  let listener = TcpListener::bind("127.0.0.1:8888")?;
+
+  // kevent is also a data struct
+  let interest = libc::kevent {
+    ident: listener.as_raw_fd() as libc::uintptr_t,
+    filter: libc::EVFILT_READ, // EVFILT_READ indicates we only care about read on the ident provided,
+    flags: libc::EV_CLEAR | libc::EV_RECEIPT | libc::EV_ADD
+    fflags: 0,
+    data: 0,
+    udata: 0 as *mut libc::c_void, // this data would not be touched by kernel but return as is
+  };
+}
+```
+
+Then, we call `kevent` to actually register our interest:
+```rust
+fn main() -> std::io::Result<()> {
+  // ...
+
+  // we care about a tcp listener
+  let listener = TcpListener::bind("127.0.0.1:8888")?;
+
+  // kevent is also a data struct
+  let interest = libc::kevent {
+    ident: listener.as_raw_fd() as libc::uintptr_t,
+    filter: libc::EVFILT_READ, // EVFILT_READ indicates we only care about read on the ident provided,
+    flags: libc::EV_CLEAR | libc::EV_RECEIPT | libc::EV_ADD
+    fflags: 0,
+    data: 0,
+    udata: 0 as *mut libc::c_void, // this data would not be touched by kernel but return as is
+  };
+
+  // kevent function is to register kevent
+  let mut changelist = vec![interest];
+  let registered_num = libc::kevent(
+    kq,
+    changelist.as_ptr(),
+    1,
+    changelist.as_mut_ptr(),
+    1,
+    std::ptr::null(),
+  ).unwrap();
+}
+```
+**TODO: explain kevent syscall's parameters**
+
+#### Hold on to your ticket and ask for information later
 
 ## Time is Money
 
