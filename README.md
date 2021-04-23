@@ -146,6 +146,37 @@ fn main() -> std::io::Result<()> {
 We use `kevent` to poll for events and we want the poll would only block for 1 second. 
 The things to pay attention to would be #1 and #2. In #1, we use null pointer to tell `kqueue` that we are not adding or modifying any registered interests. In #2, after we finished polling, we need to manually set the length of the `events` array. **Why**? If we not set the length, we wouldn't get any event in the `for event in events` loop because the length of the array is always 0. The length of the array is maintained by our `Rust` program, the os has no way to know how to actually modify this bit of info, os only fill in the events in the momory location pointed by our pointer. So it's our own job to actually set the length. 
 
+**Wait, where is our eventloop?** Well, you ask I provide:
+
+```rust
+// ...
+fn main() -> std::io::Result<()> {
+  // ...
+
+  let mut events = Vec::with_capacity(10);
+  loop {
+    let timespec = libc::timespec {
+        tv_sec: 1, // we only wait for 1 second
+        tv_nsec: 0,
+    };
+    let n = libc::kevent(
+      kq, 
+      std::ptr::null(), // #1 why null ptr
+      0, 
+      events.as_mut_ptr(), 
+      events.capacity() as libc::c_int,
+      &timespec
+    ).unwrap()
+    unsafe { events.set_len(n) }; // #2 why set_len anyway?
+
+    for event in events {
+      // do something with them
+    }
+  }
+}
+```
+Just like that, we got ourself a **dead simple eventloop**.
+
 ## Time is Money
 
 Time is also a resource we deeply care about. So **How do I schedule a timeout or repeating time interval with eventloop?**
@@ -154,7 +185,69 @@ The main strategy is actually similar to polling for i/o events. We have a **que
 
 **How long do we poll for i/o events before we yield to run timers?** One of the solution is actually a natural consequence of `kevent`. A simple yet good enough strategy would be after running the pending timers, we calculate a timespec with which our kevent syscall would be used for timeouts. 
 
-TODO: fill in code snippets
+Let's take a loot at our timer and timer queue briefly:
+
+First, our `Timer`, each has its calculated deadline and an associated callback.
+```rust
+struct Timer {
+  pub deadline: SystemTime,
+  pub cb: Box<dyn Fn()>,
+}
+```
+Second, our `TimerQueue`:
+```rust
+pub struct Queue {
+    due: Option<SystemTime>,
+    inner: BinaryHeap<Reverse<Timer>>,
+}
+
+impl Queue {
+  pub fn add(&mut self, t: Duration, cb: Box<dyn Fn()>) { 
+    // add timer to the inner BinaryHeap
+  }
+
+  pub fn run(&mut self) -> Option<Duration> {
+    // run timer
+    // calculate a new due
+    // return a duration for which our poll should block
+  }
+}
+```
+The main gest would be:
+
+1. Our Queue has a explicit due timestamp, which we would compare to current time to determine if there is timer due to run.
+2. after running the queue, we get a time duration indicating how long our polling should block(as the timeout in timespec) so that we could wrap back to our timer queue.
+
+Using this queue, we would just simply substitute our fixed timespec with our timer queue calculated one:
+```rust
+// ...
+fn main() -> std::io::Result<()> {
+  // ...
+
+  let mut events = Vec::with_capacity(10);
+  loop {
+    let due = timers.run();
+    let timespec = libc::timespec {
+        tv_sec: due.as_secs(), // this time we wait as we told from timer
+        tv_nsec: due.as_subsec_nanos(),
+    };
+    let n = libc::kevent(
+      kq, 
+      std::ptr::null(), // #1 why null ptr
+      0, 
+      events.as_mut_ptr(), 
+      events.capacity() as libc::c_int,
+      &timespec
+    ).unwrap()
+    unsafe { events.set_len(n) }; // #2 why set_len anyway?
+
+    for event in events {
+      // do something with them
+    }
+  }
+}
+```
+Here wraps up our simple implementation of `setTimeout` like function in our eventloop.
 
 ## What's with the name?
 
