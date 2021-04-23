@@ -1,12 +1,13 @@
 use crate::timer::Queue;
 use crate::Interest;
+use std::cell::RefCell;
 #[cfg(unix)]
 use std::os::unix::io::RawFd;
 use std::time::Duration;
 
 pub struct Manager {
     kq: i32,
-    timers: Queue,
+    timers: RefCell<Queue>,
 }
 
 impl Manager {
@@ -17,7 +18,7 @@ impl Manager {
 
         Ok(Manager {
             kq,
-            timers: Queue::new(),
+            timers: RefCell::new(Queue::new()),
         })
     }
 
@@ -107,11 +108,11 @@ impl Manager {
         Ok(())
     }
 
-    pub fn timeout(&mut self, t: Duration, cb: Box<dyn FnOnce()>) {
-        self.timers.add(t, cb);
+    pub fn timeout(&self, t: Duration, cb: Box<dyn Fn()>) {
+        self.timers.borrow_mut().add(t, cb);
     }
 
-    pub fn run_timers(&mut self) -> Option<Duration> {
-        self.timers.run()
+    pub fn run_timers(&self) -> Option<Duration> {
+        self.timers.borrow_mut().run()
     }
 }

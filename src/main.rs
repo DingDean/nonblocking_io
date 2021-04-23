@@ -13,7 +13,7 @@ fn main() -> std::io::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:8888")?;
 
     // This is our kqueue manager
-    let mut manager = Manager::new()?;
+    let manager = Manager::new()?;
 
     // I can watch socket
     manager.register(listener.as_raw_fd(), vec![Interest::READABLE], 0)?;

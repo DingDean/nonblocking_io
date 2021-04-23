@@ -4,7 +4,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub struct Timer {
     pub deadline: SystemTime,
-    pub cb: Box<dyn FnOnce()>,
+    pub cb: Box<dyn Fn()>,
 }
 
 impl Ord for Timer {
@@ -27,7 +27,7 @@ impl PartialEq for Timer {
 impl Eq for Timer {}
 
 impl Timer {
-    pub fn new(t: Duration, cb: Box<dyn FnOnce()>) -> Self {
+    pub fn new(t: Duration, cb: Box<dyn Fn()>) -> Self {
         Self {
             deadline: SystemTime::now() + t,
             cb,
@@ -48,7 +48,7 @@ impl Queue {
         }
     }
 
-    pub fn add(&mut self, t: Duration, cb: Box<dyn FnOnce()>) {
+    pub fn add(&mut self, t: Duration, cb: Box<dyn Fn()>) {
         self.inner.push(Reverse(Timer::new(t, cb)));
         let due = match self.inner.peek() {
             Some(Reverse(a)) => Some(a.deadline),
