@@ -62,7 +62,7 @@ fn main() -> std::io::Result<()> {
 }
 ```
 
-Second, we defined the interest we have on this resouce:
+Second, we defined the interest we have on this resouce with the help of `kevent` data structure provided by kqueue. (**kevent is the name of the struct and the name of the syscall**):
 ```rust
 fn main() -> std::io::Result<()> {
   // ...
@@ -70,7 +70,7 @@ fn main() -> std::io::Result<()> {
   // we care about a tcp listener
   let listener = TcpListener::bind("127.0.0.1:8888")?;
 
-  // kevent is also a data struct
+  // kevent is also a data structure
   let interest = libc::kevent {
     ident: listener.as_raw_fd() as libc::uintptr_t,
     filter: libc::EVFILT_READ, // EVFILT_READ indicates we only care about read on the ident provided,
@@ -94,7 +94,7 @@ fn main() -> std::io::Result<()> {
   let interest = libc::kevent {
     ident: listener.as_raw_fd() as libc::uintptr_t,
     filter: libc::EVFILT_READ, // EVFILT_READ indicates we only care about read on the ident provided,
-    flags: libc::EV_CLEAR | libc::EV_RECEIPT | libc::EV_ADD
+    flags: libc::EV_CLEAR | libc::EV_RECEIPT | libc::EV_ADD | libc::DISABLE
     fflags: 0,
     data: 0,
     udata: 0 as *mut libc::c_void, // this data would not be touched by kernel but return as is
@@ -106,15 +106,21 @@ fn main() -> std::io::Result<()> {
     kq,
     changelist.as_ptr(),
     1,
-    changelist.as_mut_ptr(),
+    changelist.as_mut_ptr(), // You may wonder why we use the same array but as different pointers, please read one to find out.
     1,
     std::ptr::null(),
   ).unwrap();
 }
 ```
-**TODO: explain kevent syscall's parameters**
+There are two list you should pay attention to: `changelist` and `eventlist`. They correspond to the second and fourth parameter respecively. **What do they do?**. `changelist` is where we pass on our interests with the resource and `eventlist` is where the os return the events associated with your interests if any. To explain more plainly, in a single `kevent` syscall you actually can do two things, you use a `changelist` to register interests and you get events from `eventlist` if there is any. That's why we use `as_mut_ptr()` for our `eventlist` parameter because we need to mutate our array.
+
+**TODO**: A side note of `EV_RECEIPT` flag and it's impact.
 
 #### Hold on to your ticket and ask for information later
+So now we registered our interests, let's poll for events:
+```rust
+
+```
 
 ## Time is Money
 
