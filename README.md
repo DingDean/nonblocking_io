@@ -119,8 +119,32 @@ There are two list you should pay attention to: `changelist` and `eventlist`. Th
 #### Hold on to your ticket and ask for information later
 So now we registered our interests, let's poll for events:
 ```rust
+// ...
+fn main() -> std::io::Result<()> {
+  // ...
 
+  let mut events = Vec::with_capacity(10);
+  let timespec = libc::timespec {
+      tv_sec: 1, // we only wait for 1 second
+      tv_nsec: 0,
+  };
+  let n = libc::kevent(
+    kq, 
+    std::ptr::null(), // #1 why null ptr
+    0, 
+    events.as_mut_ptr(), 
+    events.capacity() as libc::c_int,
+    &timespec
+  ).unwrap()
+  unsafe { events.set_len(n) }; // #2 why set_len anyway?
+
+  for event in events {
+    // do something with them
+  }
+}
 ```
+We use `kevent` to poll for events and we want the poll would only block for 1 second. 
+The things to pay attention to would be #1 and #2. In #1, we use null pointer to tell `kqueue` that we are not adding or modifying any registered interests. In #2, after we finished polling, we need to manually set the length of the `events` array. **Why**? If we not set the length, we wouldn't get any event in the `for event in events` loop because the length of the array is always 0. The length of the array is maintained by our `Rust` program, the os has no way to know how to actually modify this bit of info, os only fill in the events in the momory location pointed by our pointer. So it's our own job to actually set the length. 
 
 ## Time is Money
 
