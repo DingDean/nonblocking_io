@@ -59,8 +59,11 @@ impl Manager {
         .map(|n| {
             eprintln!("成功注册 {} 个事件！", n);
             changelist.iter().for_each(|e| {
-                if e.flags & libc::EV_ERROR == libc::EV_ERROR {
-                    eprintln!("错误 {}", std::io::Error::from_raw_os_error(e.data as i32));
+                if e.data != 0 {
+                    eprintln!(
+                        "注册错误: {}",
+                        std::io::Error::from_raw_os_error(e.data as i32)
+                    );
                 }
             });
             ()
